@@ -82,32 +82,33 @@ async def submit_reclamation(
     await db.flush()
     await db.commit()
 
-    # Notify professor via in-app notification with link
-    from app.routers.notifications import add_notification
-    add_notification(
-        title="New Reclamation",
-        message=f"{student.name} submitted a justification for {module.code} Week {session.week_number}.",
-        type="info",
-        for_role="professor",
-        link="/reclamations",
-    )
-
-    # Email the professor
-    from app.services.email_service import send_reclamation_notification_to_prof
-    prof_q = await db.execute(select(User).where(User.module_id == session.module_id))
-    prof = prof_q.scalar_one_or_none()
-    if prof:
-        # Use the SMTP_FROM as prof email for now (or we could add email field to User)
-        send_reclamation_notification_to_prof(
-            professor_email=settings.smtp_from,  # sends to app email, prof sees in notifications
-            professor_name=prof.name,
-            student_name=student.name,
-            student_id=student.student_id,
-            module_name=module.name,
-            module_code=module.code,
-            week_number=session.week_number,
-            message=message,
+    # Notify professor (non-blocking — don't crash if this fails)
+    try:
+        from app.routers.notifications import add_notification
+        add_notification(
+            title="New Reclamation",
+            message=f"{student.name} submitted a justification for {module.code} Week {session.week_number}.",
+            type="info",
+            for_role="professor",
+            link="/reclamations",
         )
+
+        from app.services.email_service import send_reclamation_notification_to_prof
+        prof_q = await db.execute(select(User).where(User.module_id == session.module_id))
+        prof = prof_q.scalar_one_or_none()
+        if prof:
+            send_reclamation_notification_to_prof(
+                professor_email=settings.smtp_from,
+                professor_name=prof.name,
+                student_name=student.name,
+                student_id=student.student_id,
+                module_name=module.name,
+                module_code=module.code,
+                week_number=session.week_number,
+                message=message,
+            )
+    except Exception as e:
+        print(f"[WARN] Notification/email failed: {e}")
 
     return {"message": "Reclamation submitted successfully.", "id": str(reclamation.id)}
 
