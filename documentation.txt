@@ -8,10 +8,15 @@
 ================================================================================
 
 AttendAI is an automated attendance system that uses facial recognition to
-identify students in class videos. Professors upload a video of their class,
-and the AI identifies which students are present by comparing detected faces
-against enrolled student embeddings. Students not detected are automatically
-marked absent.
+identify students in class videos. Professors record their class via the
+browser camera, and the AI identifies which students are present by comparing
+detected faces against enrolled student embeddings. Students not detected are
+automatically marked absent.
+
+The system includes role-based access (admin, professor, student), automated
+email alerts, QR code fallback with geolocation verification, a student
+self-service portal with reclamation workflow, analytics dashboards, and
+official PDF report generation.
 
 Target Institution: FST Marrakech (Faculté des Sciences et Techniques)
 Class Structure: 1 class, 7 modules, 14 weeks per module
@@ -30,48 +35,91 @@ Backend:
 AI/ML Engine:
   - DeepFace (facial recognition library)
   - Facenet512 model (512-dimensional face embeddings)
-  - MTCNN (primary face detector)
-  - OpenCV (fallback detector + video processing)
-  - SSD (secondary fallback detector)
+  - MTCNN (face detector)
+  - OpenCV (video processing + frame preprocessing)
 
 Frontend:
   - React 18 (Vite build tool)
-  - Tailwind CSS (utility-first styling)
+  - Tailwind CSS v3 (utility-first styling)
   - React Router v6 (client-side routing)
-  - Axios (HTTP client)
-  - WebSocket (real-time updates)
+  - Axios (HTTP client with JWT interceptors)
+  - WebSocket (real-time processing updates)
+  - Plus Jakarta Sans + Inter (typography)
 
 Infrastructure:
-  - Supabase (managed PostgreSQL)
-  - Docker Compose (local dev for Postgres/Redis)
+  - Supabase (managed PostgreSQL - cloud)
+  - Gmail SMTP (automated email alerts)
+  - Optional: Railway (backend hosting) + Vercel (frontend hosting)
 
 
-3. ARCHITECTURE
+3. FEATURES LIST
 ================================================================================
 
-┌─────────────────────────────────────────────────────────────────┐
-│                   React Frontend (Vite + Tailwind)               │
-│  Login → Students → Enroll → Take Attendance → Sessions         │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │ REST API + WebSocket
-┌──────────────────────────────▼──────────────────────────────────┐
-│                    FastAPI Backend (Python)                       │
-│  ┌─────────┐  ┌──────────┐  ┌──────────┐  ┌────────────────┐  │
-│  │  Auth   │  │ Students │  │ Sessions │  │   WebSocket    │  │
-│  │ Router  │  │  Router  │  │  Router  │  │   Manager      │  │
-│  └────┬────┘  └────┬─────┘  └────┬─────┘  └───────┬────────┘  │
-│       │             │             │                 │            │
-│  ┌────▼─────────────▼─────────────▼─────────────────▼────────┐  │
-│  │              AI Pipeline (Background Worker)               │  │
-│  │  Video → Frames → Face Detection → Embedding → Matching   │  │
-│  └────────────────────────────┬──────────────────────────────┘  │
-└───────────────────────────────┼─────────────────────────────────┘
-                                │
-┌───────────────────────────────▼─────────────────────────────────┐
-│                    PostgreSQL (Supabase)                          │
-│  users | students | face_embeddings | modules | sessions |       │
-│  attendance_records                                              │
-└──────────────────────────────────────────────────────────────────┘
+CORE FEATURES:
+  ✅ AI Facial Recognition Attendance (camera recording from browser)
+  ✅ Multi-photo enrollment (3-10 images per student, individual embeddings)
+  ✅ Real-time WebSocket processing dashboard
+  ✅ Multi-detector fallback (MTCNN primary)
+  ✅ Frame preprocessing (brightness/contrast auto-adjust, upscaling)
+
+AUTHENTICATION & ROLES:
+  ✅ Unified login page (admin, professor, student - auto-detects role)
+  ✅ JWT token-based authentication
+  ✅ Role-based access control
+  ✅ Admin: full access to everything
+  ✅ Professor: own module only, sequential weeks
+  ✅ Student: self-service portal with attendance view
+
+ATTENDANCE MANAGEMENT:
+  ✅ Sequential week enforcement (can't skip weeks)
+  ✅ Retake any completed week (overwrites old data)
+  ✅ Manual attendance overrides (present/absent/justified)
+  ✅ QR Code fallback with geolocation verification (50m radius)
+  ✅ Detection timestamp receipts ("Detected at 04:22")
+
+STUDENT PORTAL:
+  ✅ Students log in with email + password (12341234)
+  ✅ View overall attendance rate + per-module breakdown
+  ✅ Visual week dots (green=present, red=absent, grey=no data)
+  ✅ Submit reclamations (justification requests) with file attachments
+  ✅ Track reclamation status (pending/approved/declined)
+  ✅ QR code check-in from portal
+  ✅ Download attendance certificate (PDF)
+
+RECLAMATION WORKFLOW:
+  ✅ Student taps absent week → submits justification + optional certificate
+  ✅ Professor receives email notification about new reclamation
+  ✅ Professor reviews in Reclamations page (sees message + attachment)
+  ✅ Professor approves (marks as justified) or declines
+  ✅ Student receives email with decision result
+  ✅ All actions logged in audit trail
+
+AUTOMATED EMAIL ALERTS:
+  ✅ Warning at 2 absences in any module
+  ✅ Critical warning at 3 absences
+  ✅ Reclamation submission notification to professor
+  ✅ Reclamation decision notification to student
+  ✅ Beautiful HTML email templates
+
+ANALYTICS & INTELLIGENCE:
+  ✅ Dashboard home page (stats overview, quick actions, recent sessions)
+  ✅ Attendance heatmap (7 modules × 14 weeks, color-coded)
+  ✅ Attendance trends chart (line graph per module over time)
+  ✅ Critical Risk Radar (students approaching exclusion threshold)
+  ✅ In-app notification bell with clickable notifications
+
+REPORTS & EXPORT:
+  ✅ Per-student PDF report ("Relevé d'Assiduité")
+  ✅ Per-module PDF report ("Feuille d'Émargement")
+  ✅ Attendance certificate PDF ("Attestation d'Assiduité")
+  ✅ Apogée-compatible CSV export (semicolon delimiter)
+
+ADMIN TOOLS:
+  ✅ Student enrollment with profile picture selection
+  ✅ Edit student info (name, email, CNE)
+  ✅ Delete students
+  ✅ Audit log (tracks all system actions)
+  ✅ Module management
 
 
 4. DATABASE SCHEMA
@@ -123,41 +171,93 @@ TABLE: attendance_records
   - session_id      UUID (FK → sessions.id, CASCADE)
   - student_ref     UUID (FK → students.id, CASCADE)
   - is_present      BOOLEAN
-  - confidence      FLOAT (nullable)    -- AI confidence score
+  - confidence      FLOAT (nullable)    -- AI confidence, 0.99=QR, -1=justified
   - detected_at_sec FLOAT (nullable)    -- timestamp in video
   - created_at      TIMESTAMP
+
+TABLE: reclamations
+  - id              UUID (PK)
+  - student_ref     UUID (FK → students.id, CASCADE)
+  - session_id      UUID (FK → sessions.id, CASCADE)
+  - message         TEXT
+  - attachment      TEXT (nullable)     -- base64 encoded file
+  - status          VARCHAR(50)         -- pending/approved/declined
+  - professor_response TEXT (nullable)
+  - created_at      TIMESTAMP
+  - resolved_at     TIMESTAMP (nullable)
 
 
 5. API ENDPOINTS
 ================================================================================
 
 Authentication:
-  POST   /api/auth/login          Login with username/password → JWT token
-  GET    /api/auth/me             Get current user profile
+  POST   /api/auth/login              Unified login (admin/prof/student)
+  GET    /api/auth/me                 Get current user profile
 
-Students (Admin only for write, all authenticated for read):
-  POST   /api/students/enroll     Enroll student with 3-10 face images
-  GET    /api/students/           List all students with attendance rates
-  GET    /api/students/{id}       Get student profile
-  GET    /api/students/{id}/attendance   Per-module attendance breakdown
-  DELETE /api/students/{id}       Delete student (admin only)
+Students:
+  POST   /api/students/enroll         Enroll student with face images (admin)
+  GET    /api/students/               List all students with attendance rates
+  GET    /api/students/{id}           Get student profile
+  GET    /api/students/{id}/attendance Per-module attendance breakdown
+  PATCH  /api/students/{id}           Update student info (admin)
+  DELETE /api/students/{id}           Delete student (admin)
 
 Modules:
-  GET    /api/modules/            List all modules (public)
-  POST   /api/modules/            Create module (admin only)
-  DELETE /api/modules/{id}        Delete module (admin only)
+  GET    /api/modules/                List all modules (public)
+  POST   /api/modules/                Create module (admin)
+  DELETE /api/modules/{id}            Delete module (admin)
 
 Sessions:
-  POST   /api/sessions/identify   Upload video for attendance processing
-  GET    /api/sessions/           List sessions (filtered by role)
-  GET    /api/sessions/next-week/{module_id}   Get next available week
-  GET    /api/sessions/{id}/attendance         Full attendance list
+  POST   /api/sessions/identify       Upload video for attendance
+  GET    /api/sessions/               List sessions (role-filtered)
+  GET    /api/sessions/next-week/{id} Get next available week
+  GET    /api/sessions/{id}/attendance Full attendance list
+
+Analytics:
+  GET    /api/analytics/heatmap       Attendance matrix (modules × weeks)
+  GET    /api/analytics/at-risk       Students approaching exclusion
+  GET    /api/analytics/trends        Attendance trends over time
+  GET    /api/analytics/export/csv    Apogée CSV export
+
+Attendance Overrides:
+  PATCH  /api/attendance/{record_id}  Override status (present/absent/justified)
+  GET    /api/attendance/session/{id} Detailed attendance with record IDs
+
+QR Code:
+  POST   /api/qr/generate/{session}  Generate QR (captures professor location)
+  POST   /api/qr/checkin             Student check-in (verifies location)
+  GET    /api/qr/active/{session}    Check if active QR exists
+
+Reclamations:
+  POST   /api/reclamations/submit     Student submits justification
+  GET    /api/reclamations/student/{id} Student's reclamation history
+  GET    /api/reclamations/pending    Pending reclamations (for professor)
+  POST   /api/reclamations/{id}/resolve Approve or decline
+
+Reports:
+  GET    /api/reports/student/{id}    PDF attendance report
+  GET    /api/reports/module/{id}     PDF module émargement sheet
+  GET    /api/reports/certificate/{id} PDF attendance certificate
+
+Dashboard:
+  GET    /api/dashboard/stats         Overview statistics
+
+Notifications:
+  GET    /api/notifications/          Get notifications
+  POST   /api/notifications/read-all  Mark all as read
+
+Audit:
+  GET    /api/audit/                  Full audit log (admin)
+
+Student Portal:
+  POST   /api/portal/login            Student login (email + password)
+  GET    /api/portal/my-attendance/{id} Full attendance data
 
 WebSocket:
-  WS     /ws/session/{session_id}  Real-time processing updates
+  WS     /ws/session/{session_id}     Real-time processing updates
 
 Health:
-  GET    /health                   Service health check
+  GET    /health                      Service health check
 
 
 6. AUTHENTICATION & AUTHORIZATION
@@ -166,13 +266,21 @@ Health:
 Authentication: JWT Bearer tokens (24-hour expiry)
 Password Hashing: bcrypt
 
+UNIFIED LOGIN (/api/auth/login):
+  - Accepts username + password
+  - Tries admin/professor first (username match + bcrypt verify)
+  - Falls back to student (email match + password "12341234")
+  - Returns JWT token + user object with role
+
 Roles:
   ADMIN:
-    - Can enroll/delete students
+    - Can enroll/edit/delete students
     - Can take attendance for ANY module
     - Can view all sessions and attendance
     - Can create/delete modules
-    - Can skip week restrictions
+    - Can view audit log
+    - Can export data
+    - Can approve/decline reclamations for any module
 
   PROFESSOR:
     - Can take attendance for their OWN module only
@@ -180,6 +288,14 @@ Roles:
     - Can view their own module's sessions
     - Cannot skip weeks (must be sequential)
     - Cannot enroll/delete students
+    - Can approve/decline reclamations for their module
+    - Can generate QR codes for their sessions
+
+  STUDENT:
+    - Can view own attendance only (via portal)
+    - Can submit reclamations with attachments
+    - Can check in via QR code
+    - Can download attendance certificate
 
 Default Credentials:
   Admin:     admin / admin123
@@ -191,159 +307,198 @@ Default Credentials:
     prof.mouline   / prof123  → Réseaux Informatiques (RI)
     prof.hajji     / prof123  → Systèmes d'Exploitation (SE)
     prof.zerouali  / prof123  → Probabilités et Statistiques (PS)
+  Students:  [their email] / 12341234
 
 
-7. AI PIPELINE - HOW IT WORKS
+7. AI PIPELINE
 ================================================================================
 
 ENROLLMENT FLOW:
   1. Admin uploads 3-10 photos of a student
-  2. Each photo is validated (at least one face must be detected via MTCNN)
-  3. DeepFace extracts a 512-dimensional embedding from each photo
-  4. ALL individual embeddings are stored (not averaged)
-  5. First photo (or selected one) becomes the profile picture
-
-  Why multiple embeddings?
-  → Different angles/lighting create different vectors
-  → Matching against 5-10 vectors is far more robust than 1 averaged vector
-  → If ANY stored embedding matches the video face, the student is recognized
+  2. Each photo validated (at least one face must exist)
+  3. DeepFace extracts 512-d embedding from each photo (Facenet512)
+  4. Fallback chain: MTCNN → OpenCV → SSD → skip (for detection)
+  5. ALL individual embeddings stored (not averaged)
+  6. First photo (or selected one) becomes profile picture
 
 IDENTIFICATION FLOW (Video Processing):
-  1. Video is uploaded and saved to disk
-  2. Background worker starts processing
-  3. Frames extracted at 2 FPS (2 frames per second)
-  4. Each frame is preprocessed:
-     - Converted BGR → RGB
-     - Upscaled if too small (< 640px)
-     - Brightness/contrast auto-adjusted for dark frames (CLAHE)
-  5. Face detection uses FALLBACK CHAIN:
-     - Try MTCNN first (best accuracy for frontal faces)
-     - If nothing found, try OpenCV Haar Cascade (catches different angles)
-     - If still nothing, try SSD (good for distant/small faces)
-  6. Each detected face (min 30x30px) gets a 512-d embedding via Facenet512
-  7. Embedding compared against ALL stored embeddings using DUAL METRICS:
-     - Cosine Similarity (threshold: 0.4)
-     - Euclidean Distance (threshold: 30.0)
-     - Match if EITHER metric passes
-  8. Best confidence per student is kept (deduplicated)
-  9. Results broadcast via WebSocket in real-time
-  10. All students marked: detected = present, not detected = absent
-
-MATCHING ALGORITHM:
-  For each face detected in video:
-    For each stored embedding in database:
-      cosine_score = dot(face, stored) / (norm(face) * norm(stored))
-      euclidean_dist = L2_norm(face - stored)
-      
-      if cosine_score >= 0.4 OR euclidean_dist <= 30.0:
-        → MATCH (keep best score per student)
-
-  Confidence = combined score from both metrics
+  1. Professor records class via browser camera
+  2. Video uploaded, background worker starts
+  3. Frames extracted at 2 FPS
+  4. Each frame preprocessed:
+     - BGR → RGB conversion
+     - Upscaling if < 640px
+     - CLAHE brightness/contrast for dark frames
+  5. MTCNN detects faces (min 50x50px)
+  6. Each face embedded via Facenet512
+  7. Cosine similarity matching against all stored embeddings
+  8. Margin check: reject if best and second-best are too close (<0.05)
+  9. Threshold: 0.55 cosine similarity
+  10. Best confidence per student kept (deduplicated)
+  11. Results broadcast via WebSocket in real-time
+  12. All students marked: detected=present, not detected=absent
+  13. Email alerts triggered for students hitting 2+ absences
 
 
-8. BUSINESS RULES
+8. QR CODE FALLBACK SYSTEM
 ================================================================================
 
-Sequential Weeks:
-  - Professors must take attendance in order (Week 1, then 2, then 3...)
-  - Cannot skip to Week 3 without completing Week 1 and 2
-  - CAN retake any previously completed week (overwrites old data)
-  - Admin can bypass this restriction
+Purpose: Allow students missed by AI to check in physically.
 
-Module Ownership:
-  - Each professor is assigned to exactly one module
-  - They can ONLY upload videos for their assigned module
-  - They can ONLY view sessions for their module
-  - Admin has access to all modules
+FLOW:
+  1. Professor completes a session (video processed)
+  2. Goes to Sessions → clicks "Generate QR"
+  3. Browser captures professor's GPS location
+  4. QR code generated with unique token (expires in 10 minutes)
+  5. QR encodes a URL: https://[domain]/portal?token=[uuid]
+  6. Professor displays QR to class (projector/phone)
+  7. Student scans with phone camera → opens portal with token pre-filled
+  8. Student logs in → taps "Check In"
+  9. Student's GPS captured → verified within 50m of professor
+  10. If within range → marked as present (confidence: 0.99 = "QR Code")
 
-Attendance Logic:
-  - When a video is processed, ALL enrolled students get a record
-  - Detected in video → is_present = True + confidence score
-  - Not detected → is_present = False
-  - Retaking a week deletes the old session and all its attendance records
+PROTECTIONS:
+  - 10-minute expiry
+  - Single-use per student
+  - Geolocation verification (50m radius) when available
+  - Student must be enrolled and authenticated
+  - Falls back to time-only protection if GPS unavailable
 
 
-9. PROJECT STRUCTURE
+9. RECLAMATION WORKFLOW
+================================================================================
+
+STUDENT SUBMITS:
+  1. Student sees red (absent) week dot in their portal
+  2. Taps it → modal opens
+  3. Writes justification reason
+  4. Optionally attaches medical certificate (image/PDF, max 5MB)
+  5. Submits → status: "pending"
+  6. Professor receives email notification
+  7. In-app notification appears in professor's bell
+
+PROFESSOR REVIEWS:
+  1. Goes to Reclamations page (sidebar)
+  2. Sees pending requests with student info, message, attachment
+  3. Clicks "Review & Respond"
+  4. Types optional response
+  5. Clicks "Approve" or "Decline"
+
+RESULT:
+  - Approved: absence marked as "justified" (confidence = -1)
+  - Declined: absence remains unjustified
+  - Student receives email with decision + professor's response
+  - Action logged in audit trail
+
+
+10. PROJECT STRUCTURE
 ================================================================================
 
 attend-ai/
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── main.py                 # FastAPI app, CORS, routers
-│   │   ├── config.py               # Environment settings
+│   │   ├── main.py                 # FastAPI app, CORS, all routers
+│   │   ├── config.py               # Pydantic Settings (env-driven)
 │   │   ├── database.py             # Async SQLAlchemy engine/session
 │   │   ├── models.py               # All SQLAlchemy models
 │   │   ├── schemas.py              # Pydantic request/response schemas
 │   │   ├── auth.py                 # JWT + bcrypt auth utilities
 │   │   ├── routers/
-│   │   │   ├── __init__.py
-│   │   │   ├── auth_router.py      # Login, /me endpoints
-│   │   │   ├── students.py         # Enrollment, profiles, attendance
-│   │   │   ├── modules.py          # Module CRUD
+│   │   │   ├── auth_router.py      # Unified login endpoint
+│   │   │   ├── students.py         # Enrollment, profiles, CRUD
+│   │   │   ├── modules.py          # Module management
 │   │   │   ├── sessions.py         # Video upload, session management
+│   │   │   ├── analytics.py        # Heatmap, risk radar, trends, CSV export
+│   │   │   ├── overrides.py        # Attendance status overrides
+│   │   │   ├── qr_attendance.py    # QR generation + check-in
+│   │   │   ├── reclamations.py     # Student justification workflow
+│   │   │   ├── notifications.py    # In-app notification system
+│   │   │   ├── reports.py          # PDF generation (reports + certificates)
+│   │   │   ├── dashboard.py        # Dashboard stats endpoint
+│   │   │   ├── audit.py            # Audit log
+│   │   │   ├── student_portal.py   # Student self-service endpoints
 │   │   │   └── websocket.py        # WebSocket connection manager
 │   │   ├── services/
-│   │   │   ├── __init__.py
-│   │   │   ├── face_detection.py   # MTCNN face validation
+│   │   │   ├── face_detection.py   # Face validation
 │   │   │   ├── face_embedding.py   # Facenet512 embedding extraction
 │   │   │   ├── video_processor.py  # OpenCV frame extraction + preprocessing
-│   │   │   └── identification.py   # Cosine + Euclidean matching
+│   │   │   ├── identification.py   # Cosine similarity matching
+│   │   │   └── email_service.py    # SMTP email templates
 │   │   └── workers/
-│   │       ├── __init__.py
 │   │       └── video_worker.py     # Background video processing task
 │   ├── init_db.py                  # DB initialization + seed script
 │   ├── requirements.txt
+│   ├── Dockerfile
+│   ├── railway.toml
 │   └── .env
 ├── frontend/
 │   ├── src/
 │   │   ├── main.jsx                # React entry point
-│   │   ├── App.jsx                 # Router + navigation + auth guard
-│   │   ├── index.css               # Tailwind imports
+│   │   ├── App.jsx                 # Router + role-based routing
+│   │   ├── index.css               # Tailwind + custom styles
 │   │   ├── components/
-│   │   │   ├── EnrollmentForm.jsx  # Multi-image upload with profile picker
-│   │   │   ├── VideoUpload.jsx     # Video file upload component
+│   │   │   ├── Shell.jsx           # Sidebar navigation layout
+│   │   │   ├── CameraRecorder.jsx  # Browser camera recording
 │   │   │   ├── Dashboard.jsx       # Real-time processing dashboard
-│   │   │   └── ResultCard.jsx      # Individual match result card
+│   │   │   ├── NotificationBell.jsx # Notification dropdown
+│   │   │   └── TrendsChart.jsx     # SVG attendance line chart
 │   │   ├── hooks/
 │   │   │   └── useWebSocket.js     # WebSocket hook for live updates
 │   │   ├── services/
-│   │   │   └── api.js              # Axios client + auth interceptors
+│   │   │   └── api.js              # Axios client + all API calls
 │   │   └── pages/
-│   │       ├── LoginPage.jsx       # Authentication page
-│   │       ├── StudentsPage.jsx    # Student grid with attendance bars
-│   │       ├── StudentDetailPage.jsx # Individual student profile
-│   │       ├── EnrollPage.jsx      # Student enrollment page
-│   │       ├── IdentifyPage.jsx    # Take attendance (video upload)
-│   │       └── SessionsPage.jsx    # Session history + attendance details
+│   │       ├── LoginPage.jsx       # Unified login
+│   │       ├── DashboardPage.jsx   # Stats overview home page
+│   │       ├── StudentsPage.jsx    # Student grid with search
+│   │       ├── StudentDetailPage.jsx # Profile + edit + PDF download
+│   │       ├── EnrollPage.jsx      # Multi-photo enrollment
+│   │       ├── IdentifyPage.jsx    # Camera recording + attendance
+│   │       ├── SessionsPage.jsx    # History + overrides + QR generation
+│   │       ├── ReclamationsPage.jsx # Professor review interface
+│   │       ├── AnalyticsPage.jsx   # Heatmap + trends + risk radar
+│   │       ├── ExportPage.jsx      # CSV/PDF export
+│   │       ├── AuditPage.jsx       # System action log
+│   │       └── StudentPortalPage.jsx # Student self-service
+│   ├── public/
+│   │   └── logo.svg                # App logo
 │   ├── package.json
-│   ├── vite.config.js              # Vite config with API proxy
+│   ├── vite.config.js
 │   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   └── index.html
-├── docker-compose.yml              # PostgreSQL + Redis containers
-├── .env.example
+│   └── .env.production
+├── docker-compose.yml
+├── .gitignore
 ├── documentation.txt               # This file
 └── README.md
 
 
-10. SETUP & INSTALLATION
+11. SETUP & INSTALLATION
 ================================================================================
 
 Prerequisites:
   - Python 3.12+
   - Node.js 18+
-  - PostgreSQL (or Supabase account)
+  - PostgreSQL (Supabase account or local)
 
 Backend Setup:
   cd attend-ai/backend
   pip install -r requirements.txt
   pip install tf-keras                    # Required for TensorFlow 2.21+
-  
-  # Configure database URL in .env
-  # Then initialize:
+
+  # Create .env file with:
+  DATABASE_URL=postgresql+asyncpg://[user]:[pass]@[host]:5432/[db]
+  CORS_ORIGINS=https://localhost:5173
+  FACE_MATCH_THRESHOLD=0.55
+  FRAME_EXTRACTION_FPS=2
+  SMTP_HOST=smtp.gmail.com
+  SMTP_PORT=587
+  SMTP_USER=your-email@gmail.com
+  SMTP_PASSWORD=your-app-password
+  SMTP_FROM=your-email@gmail.com
+
+  # Initialize database:
   python init_db.py
-  
+
   # Start server:
   python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
@@ -351,103 +506,33 @@ Frontend Setup:
   cd attend-ai/frontend
   npm install
   npm run dev
-  
-  # App available at http://localhost:5173
 
-Environment Variables (.env):
-  DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname
-  REDIS_URL=redis://localhost:6379/0
-  APP_HOST=0.0.0.0
-  APP_PORT=8000
-  CORS_ORIGINS=http://localhost:5173
-  FACE_MATCH_THRESHOLD=0.4
-  FRAME_EXTRACTION_FPS=2
+  # App available at https://localhost:5173
+  # (HTTPS required for camera access on mobile)
+
+Mobile Access (same network):
+  Open https://[your-ip]:5173 on phone
+  Accept the self-signed certificate warning
 
 
-11. FRONTEND PAGES
+12. FRONTEND PAGES
 ================================================================================
 
-/login
-  - Username/password form
-  - JWT token stored in localStorage
-  - Redirects to / on success
-
-/ (Students)
-  - Grid of all enrolled students
-  - Profile picture, name, student ID
-  - Attendance rate progress bar (color-coded: green/yellow/red)
-  - Click to view detailed profile
-
-/enroll (Admin only)
-  - Form: name, student ID (CNE), email
-  - Multi-image upload (3-10 photos)
-  - Click image to set as profile picture
-  - Validates face detection before submission
-
-/identify (Take Attendance)
-  - Module selector (auto-selected for professors, dropdown for admin)
-  - Week/séance selector (shows retake vs new options)
-  - Video upload
-  - After upload: real-time dashboard with progress bar
-  - Shows detected students as they're identified
-  - Summary when complete
-
-/sessions
-  - List of all past sessions with present/absent counts
-  - Filter by module
-  - Click session to see full attendance list
-  - Each student shown with present (green) or absent (red) badge
-
-/student/:id
-  - Full profile with large photo
-  - Overall attendance percentage
-  - Per-module breakdown with progress bars
+/login — Unified login (admin/professor/student auto-detected)
+/ — Dashboard (stats, quick actions, recent sessions)
+/students — Student grid with search and attendance badges
+/student/:id — Profile detail + edit + PDF download
+/enroll — Multi-photo enrollment (admin only)
+/attendance — Camera recording + module/week selection
+/sessions — Session history + attendance detail + overrides + QR generation
+/reclamations — Professor review interface for justifications
+/analytics — Heatmap + trends chart + risk radar
+/export — CSV export in Apogée format (admin only)
+/audit — System action log (admin only)
+/portal — Student self-service (standalone, no shell)
 
 
-12. REAL-TIME UPDATES (WebSocket)
-================================================================================
-
-When a video is being processed, the frontend connects to:
-  ws://localhost:8000/ws/session/{session_id}
-
-Server sends JSON messages:
-  { "type": "status", "data": { "status": "extracting_frames", "progress": 0 } }
-  { "type": "status", "data": { "status": "identifying", "progress": 45 } }
-  { "type": "match", "data": { "name": "Mohamed", "student_id": "R130...", "confidence": 0.72 } }
-  { "type": "complete", "data": { "total_identified": 5, "total_frames": 20 } }
-
-Status progression:
-  extracting_frames → detecting_faces → identifying → complete
-
-
-13. TIPS FOR BEST RESULTS
-================================================================================
-
-Enrollment Photos (3-10 per student):
-  - Include frontal face (looking at camera)
-  - Include slight left and right angles
-  - Mix indoor and outdoor lighting
-  - At least one photo similar to video quality
-  - Clear, unobstructed face (no sunglasses, masks)
-  - Different expressions (neutral, slight smile)
-
-Video Recording:
-  - Good lighting (avoid backlight)
-  - Camera at face level or slightly above
-  - Students should face camera at some point
-  - Minimum 720p resolution recommended
-  - Avoid excessive motion blur
-  - 5-15 seconds is usually enough if faces are visible
-
-Troubleshooting Low Detection:
-  - Enroll with MORE photos (8-10 instead of 3)
-  - Use photos taken in similar conditions to the video
-  - Ensure video has adequate lighting
-  - Lower FACE_MATCH_THRESHOLD in .env (try 0.35)
-  - Increase FRAME_EXTRACTION_FPS (try 3)
-
-
-14. MODULES (FST Marrakech)
+13. MODULES (FST Marrakech)
 ================================================================================
 
 Code  | Name                              | Professor
@@ -463,25 +548,80 @@ PS    | Probabilités et Statistiques      | Prof. Zerouali
 Each module has 14 weeks of sessions.
 
 
+14. BUSINESS RULES
+================================================================================
+
+Sequential Weeks:
+  - Professors must take attendance in order (Week 1 → 2 → 3...)
+  - Cannot skip to Week 3 without completing Weeks 1 and 2
+  - CAN retake any previously completed week (overwrites old data)
+  - Admin can bypass this restriction
+
+Module Ownership:
+  - Each professor is assigned to exactly one module
+  - They can ONLY record videos for their assigned module
+  - They can ONLY view sessions for their module
+  - Admin has access to all modules
+
+Attendance Logic:
+  - Detected in video → is_present = True + confidence score
+  - Not detected → is_present = False
+  - QR check-in → is_present = True, confidence = 0.99
+  - Justified (approved reclamation) → is_present = False, confidence = -1
+  - Retaking a week deletes old session and all its attendance records
+
+Email Triggers:
+  - 2 absences in any module → first warning email to student
+  - 3 absences in any module → critical warning email
+  - Reclamation submitted → notification email to professor
+  - Reclamation resolved → result email to student
+
+Exclusion Threshold:
+  - 3+ unjustified absences in a module = critical risk
+  - Flagged on analytics dashboard
+
+
 15. SECURITY NOTES
 ================================================================================
 
-- Passwords hashed with bcrypt (cost factor 12)
+- Passwords hashed with bcrypt
 - JWT tokens expire after 24 hours
 - CORS restricted to frontend origin
 - File uploads validated (type + size limits)
 - SQL injection prevented via SQLAlchemy ORM
 - Profile images stored as base64 in DB (no file system exposure)
-- SECRET_KEY should be changed in production (app/auth.py)
-- Database credentials should use environment variables
+- QR codes expire after 10 minutes, single-use, geo-verified
+- Student portal isolated from admin routes
+- Audit log tracks all significant actions
 
 Production Recommendations:
-- Change SECRET_KEY to a random 64-char string
-- Use HTTPS
+- Change SECRET_KEY in auth.py to a random 64-char string
+- Use proper HTTPS (not self-signed)
 - Set stricter CORS origins
 - Add rate limiting
-- Store videos in cloud storage (S3/GCS) instead of local disk
+- Store videos in cloud storage (S3) instead of local disk
+- Move notifications/audit to database tables (currently in-memory)
 - Add proper logging and monitoring
+
+
+16. DEPLOYMENT (OPTIONAL)
+================================================================================
+
+The app can be deployed for public access:
+
+Backend: Railway (railway.app)
+  - Root directory: backend
+  - Uses Dockerfile
+  - Set environment variables in Railway dashboard
+  - Generates public URL
+
+Frontend: Vercel (vercel.com)
+  - Root directory: frontend
+  - Framework: Vite
+  - Set VITE_API_URL to Railway backend URL
+  - Generates public URL
+
+Or run locally on same network for development/demos.
 
 
 ================================================================================
