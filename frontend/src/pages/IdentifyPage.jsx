@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getModules, createSession, getNextWeek, getCurrentUser } from "../services/api";
 import Dashboard from "../components/Dashboard";
 import CameraRecorder from "../components/CameraRecorder";
+import LiveScanner from "../components/LiveScanner";
 
 function IdentifyPage() {
   const [modules, setModules] = useState([]);
@@ -13,6 +14,7 @@ function IdentifyPage() {
   const [error, setError] = useState(null);
   const [session, setSession] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [showLiveScan, setShowLiveScan] = useState(false);
 
   const user = getCurrentUser();
   const isAdmin = user?.role === "admin";
@@ -142,6 +144,27 @@ function IdentifyPage() {
     );
   }
 
+  // Live scan state
+  if (showLiveScan) {
+    const moduleName = modules.find((m) => m.id === selectedModule)?.name || "";
+    return (
+      <section className="max-w-2xl mx-auto">
+        <div className="mb-6">
+          <h2 className="font-display font-bold text-slate-900 text-xl">Live Scan</h2>
+          <p className="text-sm text-slate-400 mt-0.5">{moduleName} · Week {weekNumber}</p>
+        </div>
+        <div className="bg-white border border-slate-100 rounded-2xl p-6">
+          <LiveScanner
+            moduleId={selectedModule}
+            weekNumber={weekNumber}
+            onComplete={() => { setShowLiveScan(false); handleReset(); }}
+            onCancel={() => setShowLiveScan(false)}
+          />
+        </div>
+      </section>
+    );
+  }
+
   // Setup form
   const weekOptions = [];
   if (nextWeekInfo) {
@@ -224,20 +247,33 @@ function IdentifyPage() {
             )}
           </div>
 
-          {/* Open Camera Button */}
-          <button
-            onClick={handleOpenCamera}
-            disabled={!selectedModule || loading}
-            className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-            </svg>
-            Open Camera & Record
-          </button>
+          {/* Mode Selection */}
+          <div className="space-y-2">
+            <button
+              onClick={() => { if (!selectedModule) { setError("Please select a module first."); return; } setError(null); setShowLiveScan(true); }}
+              disabled={!selectedModule || loading}
+              className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 3.75H6A2.25 2.25 0 0 0 3.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0 1 20.25 6v1.5M20.25 16.5V18A2.25 2.25 0 0 1 18 20.25h-1.5M3.75 16.5V18A2.25 2.25 0 0 0 6 20.25h1.5" />
+              </svg>
+              Live Scan (Recommended)
+            </button>
+            <button
+              onClick={handleOpenCamera}
+              disabled={!selectedModule || loading}
+              className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
+              </svg>
+              Record Video
+            </button>
+          </div>
 
           <p className="text-xs text-slate-400 text-center">
-            Record 10–30 seconds of the class with faces visible.
+            <strong>Live Scan:</strong> Real-time identification as you point the camera.<br/>
+            <strong>Record:</strong> Record a video, then AI processes it after.
           </p>
         </div>
       </div>

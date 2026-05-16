@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import students, sessions, websocket, modules, auth_router, analytics, overrides, qr_attendance, notifications, reports, student_portal, audit, dashboard, reclamations
+from app.routers import students, sessions, websocket, modules, auth_router, analytics, overrides, qr_attendance, notifications, reports, student_portal, audit, dashboard, reclamations, live_scan
 
 app = FastAPI(title="AttendAI - FST Marrakech", version="2.0.0", description="Automated Facial Recognition Attendance System")
 
@@ -29,6 +29,7 @@ app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(audit.router, prefix="/api/audit", tags=["audit"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(reclamations.router, prefix="/api/reclamations", tags=["reclamations"])
+app.include_router(live_scan.router, prefix="/api/live", tags=["live-scan"])
 app.include_router(websocket.router, tags=["websocket"])
 
 os.makedirs(settings.upload_dir, exist_ok=True)

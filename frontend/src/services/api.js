@@ -278,6 +278,36 @@ export async function getAuditLog() {
   return response.data;
 }
 
+// --- Live Scan ---
+export async function startLiveScan(moduleId, weekNumber) {
+  const formData = new FormData();
+  formData.append("module_id", moduleId);
+  formData.append("week_number", weekNumber);
+  const response = await api.post("/live/start", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+}
+
+export async function sendLiveFrame(scanId, frameDataUrl) {
+  const formData = new FormData();
+  formData.append("scan_id", scanId);
+  formData.append("frame_data", frameDataUrl);
+  const response = await api.post("/live/frame", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+}
+
+export async function finishLiveScan(scanId) {
+  const formData = new FormData();
+  formData.append("scan_id", scanId);
+  const response = await api.post("/live/finish", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+}
+
 // --- Reclamations ---
 export async function submitReclamation({ student_id, session_id, message, attachment }) {
   const formData = new FormData();
