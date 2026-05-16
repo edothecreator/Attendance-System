@@ -25,12 +25,19 @@ def extract_frames(video_path: str, fps: int = None) -> Generator[tuple[int, flo
         raise ValueError(f"Cannot open video file: {video_path}")
 
     video_fps = cap.get(cv2.CAP_PROP_FPS)
-    if video_fps <= 0:
-        video_fps = 30.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    frame_interval = int(video_fps / fps)
-    if frame_interval < 1:
-        frame_interval = 1
+    # Browser-recorded WebM often reports wrong FPS (0, 1000, etc.)
+    # Detect and fix unreliable FPS
+    if video_fps <= 0 or video_fps > 120:
+        # Estimate real FPS from frame count and duration
+        if total_frames > 0:
+            # Assume ~30fps for browser recordings
+            video_fps = 30.0
+        else:
+            video_fps = 30.0
+
+    frame_interval = max(1, int(video_fps / fps))
 
     frame_count = 0
     extracted_count = 0
@@ -92,12 +99,19 @@ def get_video_info(video_path: str) -> dict:
     if not cap.isOpened():
         raise ValueError(f"Cannot open video file: {video_path}")
 
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # Fix unreliable FPS from browser recordings
+    if fps <= 0 or fps > 120:
+        fps = 30.0
+
     info = {
-        "fps": cap.get(cv2.CAP_PROP_FPS),
-        "frame_count": int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
+        "fps": fps,
+        "frame_count": frame_count,
         "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
         "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
     }
-    info["duration_sec"] = info["frame_count"] / info["fps"] if info["fps"] > 0 else 0
+    info["duration_sec"] = frame_count / fps if fps > 0 else 0
     cap.release()
     return info

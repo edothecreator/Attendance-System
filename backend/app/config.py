@@ -7,9 +7,10 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     cors_origins: str = "http://localhost:5173"
-    face_match_threshold: float = 0.55
-    frame_extraction_fps: int = 2
+    face_match_threshold: float = 0.6
+    frame_extraction_fps: int = 3
     upload_dir: str = "./uploads"
+    app_url: str = "https://localhost:5173"  # Frontend URL for QR codes
 
     # SMTP for email alerts
     smtp_host: str = ""

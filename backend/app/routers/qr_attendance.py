@@ -64,8 +64,7 @@ async def generate_qr_code(
     # Generate QR code image as base64
     # QR contains a URL that opens the student portal with token pre-filled
     from app.config import settings
-    cors_origin = settings.cors_origins.split(",")[0]
-    qr_data = f"{cors_origin}/portal?token={token}"
+    qr_data = f"{settings.app_url}/portal?token={token}"
 
     img = qrcode.make(qr_data, box_size=8, border=2)
     buf = io.BytesIO()

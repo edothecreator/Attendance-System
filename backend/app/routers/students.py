@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models import User, Student, FaceEmbedding, AttendanceRecord, Module, Session
 from app.schemas import StudentEnrollResponse, StudentProfile, StudentAttendanceDetail
 from app.services.face_detection import load_image
-from app.services.face_embedding import extract_embedding_from_image
+from app.services.face_engine import extract_embedding_fast
 from app.auth import require_admin, get_current_user
 
 router = APIRouter()
@@ -55,7 +55,7 @@ async def enroll_student(
 
         try:
             img_array = load_image(image_bytes)
-            embedding = extract_embedding_from_image(img_array)
+            embedding = extract_embedding_fast(img_array)
         except Exception:
             raise HTTPException(status_code=400, detail=f"Image {i + 1}: Could not detect a face. Try a clearer photo.")
 

@@ -17,10 +17,11 @@ function Shell({ user, onLogout, children }) {
         {/* Brand */}
         <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-50">
           <img src="/logo.svg" alt="AttendAI" className="w-9 h-9 rounded-xl shadow-lg shadow-sky-500/20" />
-          <div>
+          <div className="flex-1">
             <h1 className="font-display font-extrabold text-slate-900 text-[15px] leading-none tracking-tight">AttendAI</h1>
             <p className="text-[10px] text-slate-400 mt-0.5 font-medium">FST Marrakech</p>
           </div>
+          <img src="/fst-logo.png" alt="FST" className="h-8 object-contain opacity-70" />
         </div>
 
         {/* Navigation */}
@@ -55,7 +56,6 @@ function Shell({ user, onLogout, children }) {
               <p className="text-[13px] font-semibold text-slate-700 truncate">{user.name}</p>
               <p className="text-[11px] text-slate-400 capitalize">{user.role}</p>
             </div>
-            <NotificationBell />
             <button
               onClick={handleLogout}
               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-white hover:shadow-sm transition-all duration-200"
@@ -89,8 +89,13 @@ function Shell({ user, onLogout, children }) {
           </div>
         </header>
 
+        {/* Main content header with notification */}
+        <div className="flex items-center justify-end px-6 lg:px-8 pt-4 pb-0">
+          <NotificationBell />
+        </div>
+
         {/* Scrollable main */}
-        <main className="flex-1 overflow-y-auto scrollbar-thin p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto scrollbar-thin px-6 lg:px-8 pb-8">
           <div className="max-w-6xl mx-auto">
             {children}
           </div>

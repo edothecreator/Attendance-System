@@ -2,9 +2,15 @@ import { useState, useEffect } from "react";
 import { studentLogin, getMyAttendance, qrCheckin, downloadCertificate, submitReclamation, getStudentReclamations } from "../services/api";
 
 function StudentPortalPage({ user: propUser, onLogout }) {
-  // Parse token from URL manually (for QR code flow)
+  // Parse token from URL or sessionStorage (persists through login redirect)
   const urlParams = new URLSearchParams(window.location.search);
-  const initialToken = urlParams.get("token") || "";
+  const urlToken = urlParams.get("token") || "";
+  
+  // Save token to sessionStorage if it came from URL (before login clears it)
+  if (urlToken) {
+    sessionStorage.setItem("qr_token", urlToken);
+  }
+  const initialToken = urlToken || sessionStorage.getItem("qr_token") || "";
 
   const [student, setStudent] = useState(propUser || null);
   const [attendance, setAttendance] = useState(null);
@@ -59,6 +65,7 @@ function StudentPortalPage({ user: propUser, onLogout }) {
         const att = await getMyAttendance(student.student_id);
         setAttendance(att);
         setQrToken("");
+        sessionStorage.removeItem("qr_token");
       } catch (err) {
         setQrMessage({ type: "error", text: err.response?.data?.detail || "Check-in failed." });
       }
@@ -82,7 +89,10 @@ function StudentPortalPage({ user: propUser, onLogout }) {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <img src="/logo.svg" alt="AttendAI" className="w-12 h-12 rounded-2xl mx-auto mb-4 shadow-lg shadow-sky-500/20" />
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <img src="/logo.svg" alt="AttendAI" className="w-11 h-11 rounded-2xl shadow-lg shadow-sky-500/20" />
+              <img src="/fst-logo.png" alt="FST Marrakech" className="h-11 object-contain" />
+            </div>
             <h1 className="font-display font-extrabold text-slate-900 text-xl">Student Portal</h1>
             <p className="text-slate-400 text-sm mt-1">View your attendance records</p>
           </div>

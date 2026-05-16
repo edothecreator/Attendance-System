@@ -91,6 +91,7 @@ async def submit_reclamation(
             type="info",
             for_role="professor",
             link="/reclamations",
+            for_module=str(session.module_id),
         )
 
         from app.services.email_service import send_reclamation_notification_to_prof
@@ -267,6 +268,7 @@ async def resolve_reclamation(
             title=f"Reclamation {decision.capitalize()}",
             message=f"{user.name} {decision} {student.name if student else 'Unknown'}'s justification.",
             type="success" if decision == "approved" else "warning",
+            for_module=str(session.module_id) if session else "",
         )
     except Exception as e:
         print(f"[WARN] Post-resolve notification failed: {e}")
