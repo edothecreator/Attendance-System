@@ -1,0 +1,489 @@
+================================================================================
+                         AttendAI - Documentation
+          Automated Facial Recognition Attendance System
+                         FST Marrakech
+================================================================================
+
+1. PROJECT OVERVIEW
+================================================================================
+
+AttendAI is an automated attendance system that uses facial recognition to
+identify students in class videos. Professors upload a video of their class,
+and the AI identifies which students are present by comparing detected faces
+against enrolled student embeddings. Students not detected are automatically
+marked absent.
+
+Target Institution: FST Marrakech (Faculté des Sciences et Techniques)
+Class Structure: 1 class, 7 modules, 14 weeks per module
+
+
+2. TECH STACK
+================================================================================
+
+Backend:
+  - Python 3.12
+  - FastAPI (async web framework)
+  - SQLAlchemy 2.0 (async ORM)
+  - PostgreSQL (hosted on Supabase)
+  - JWT Authentication (python-jose + bcrypt)
+
+AI/ML Engine:
+  - DeepFace (facial recognition library)
+  - Facenet512 model (512-dimensional face embeddings)
+  - MTCNN (primary face detector)
+  - OpenCV (fallback detector + video processing)
+  - SSD (secondary fallback detector)
+
+Frontend:
+  - React 18 (Vite build tool)
+  - Tailwind CSS (utility-first styling)
+  - React Router v6 (client-side routing)
+  - Axios (HTTP client)
+  - WebSocket (real-time updates)
+
+Infrastructure:
+  - Supabase (managed PostgreSQL)
+  - Docker Compose (local dev for Postgres/Redis)
+
+
+3. ARCHITECTURE
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────┐
+│                   React Frontend (Vite + Tailwind)               │
+│  Login → Students → Enroll → Take Attendance → Sessions         │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │ REST API + WebSocket
+┌──────────────────────────────▼──────────────────────────────────┐
+│                    FastAPI Backend (Python)                       │
+│  ┌─────────┐  ┌──────────┐  ┌──────────┐  ┌────────────────┐  │
+│  │  Auth   │  │ Students │  │ Sessions │  │   WebSocket    │  │
+│  │ Router  │  │  Router  │  │  Router  │  │   Manager      │  │
+│  └────┬────┘  └────┬─────┘  └────┬─────┘  └───────┬────────┘  │
+│       │             │             │                 │            │
+│  ┌────▼─────────────▼─────────────▼─────────────────▼────────┐  │
+│  │              AI Pipeline (Background Worker)               │  │
+│  │  Video → Frames → Face Detection → Embedding → Matching   │  │
+│  └────────────────────────────┬──────────────────────────────┘  │
+└───────────────────────────────┼─────────────────────────────────┘
+                                │
+┌───────────────────────────────▼─────────────────────────────────┐
+│                    PostgreSQL (Supabase)                          │
+│  users | students | face_embeddings | modules | sessions |       │
+│  attendance_records                                              │
+└──────────────────────────────────────────────────────────────────┘
+
+
+4. DATABASE SCHEMA
+================================================================================
+
+TABLE: users
+  - id              UUID (PK)
+  - username        VARCHAR(100) UNIQUE
+  - password_hash   VARCHAR(255)
+  - name            VARCHAR(255)
+  - role            VARCHAR(50)        -- "admin" or "professor"
+  - profile_image   TEXT (nullable)
+  - module_id       UUID (FK → modules.id, nullable)
+  - created_at      TIMESTAMP
+
+TABLE: students
+  - id              UUID (PK)
+  - student_id      VARCHAR(50) UNIQUE  -- CNE/Apogée number
+  - name            VARCHAR(255)
+  - email           VARCHAR(255) (nullable)
+  - profile_image   TEXT (nullable)     -- base64 encoded image
+  - created_at      TIMESTAMP
+
+TABLE: face_embeddings
+  - id              UUID (PK)
+  - student_ref     UUID (FK → students.id, CASCADE)
+  - embedding       FLOAT[512]          -- 512-dimensional vector
+  - created_at      TIMESTAMP
+  NOTE: Multiple embeddings per student (one per enrollment photo)
+
+TABLE: modules
+  - id              UUID (PK)
+  - name            VARCHAR(255)
+  - code            VARCHAR(50) UNIQUE
+  - total_weeks     INTEGER (default 14)
+  - created_at      TIMESTAMP
+
+TABLE: sessions
+  - id              UUID (PK)
+  - module_id       UUID (FK → modules.id, CASCADE)
+  - week_number     INTEGER
+  - session_date    TIMESTAMP
+  - video_filename  VARCHAR(255)
+  - status          VARCHAR(50)         -- pending/processing/completed/failed
+  - created_at      TIMESTAMP
+
+TABLE: attendance_records
+  - id              UUID (PK)
+  - session_id      UUID (FK → sessions.id, CASCADE)
+  - student_ref     UUID (FK → students.id, CASCADE)
+  - is_present      BOOLEAN
+  - confidence      FLOAT (nullable)    -- AI confidence score
+  - detected_at_sec FLOAT (nullable)    -- timestamp in video
+  - created_at      TIMESTAMP
+
+
+5. API ENDPOINTS
+================================================================================
+
+Authentication:
+  POST   /api/auth/login          Login with username/password → JWT token
+  GET    /api/auth/me             Get current user profile
+
+Students (Admin only for write, all authenticated for read):
+  POST   /api/students/enroll     Enroll student with 3-10 face images
+  GET    /api/students/           List all students with attendance rates
+  GET    /api/students/{id}       Get student profile
+  GET    /api/students/{id}/attendance   Per-module attendance breakdown
+  DELETE /api/students/{id}       Delete student (admin only)
+
+Modules:
+  GET    /api/modules/            List all modules (public)
+  POST   /api/modules/            Create module (admin only)
+  DELETE /api/modules/{id}        Delete module (admin only)
+
+Sessions:
+  POST   /api/sessions/identify   Upload video for attendance processing
+  GET    /api/sessions/           List sessions (filtered by role)
+  GET    /api/sessions/next-week/{module_id}   Get next available week
+  GET    /api/sessions/{id}/attendance         Full attendance list
+
+WebSocket:
+  WS     /ws/session/{session_id}  Real-time processing updates
+
+Health:
+  GET    /health                   Service health check
+
+
+6. AUTHENTICATION & AUTHORIZATION
+================================================================================
+
+Authentication: JWT Bearer tokens (24-hour expiry)
+Password Hashing: bcrypt
+
+Roles:
+  ADMIN:
+    - Can enroll/delete students
+    - Can take attendance for ANY module
+    - Can view all sessions and attendance
+    - Can create/delete modules
+    - Can skip week restrictions
+
+  PROFESSOR:
+    - Can take attendance for their OWN module only
+    - Can view students and their attendance
+    - Can view their own module's sessions
+    - Cannot skip weeks (must be sequential)
+    - Cannot enroll/delete students
+
+Default Credentials:
+  Admin:     admin / admin123
+  Professors:
+    prof.benali    / prof123  → Analyse Numérique (AN)
+    prof.tazi      / prof123  → Algèbre (ALG)
+    prof.amrani    / prof123  → Programmation Orientée Objet (POO)
+    prof.kabbaj    / prof123  → Bases de Données (BD)
+    prof.mouline   / prof123  → Réseaux Informatiques (RI)
+    prof.hajji     / prof123  → Systèmes d'Exploitation (SE)
+    prof.zerouali  / prof123  → Probabilités et Statistiques (PS)
+
+
+7. AI PIPELINE - HOW IT WORKS
+================================================================================
+
+ENROLLMENT FLOW:
+  1. Admin uploads 3-10 photos of a student
+  2. Each photo is validated (at least one face must be detected via MTCNN)
+  3. DeepFace extracts a 512-dimensional embedding from each photo
+  4. ALL individual embeddings are stored (not averaged)
+  5. First photo (or selected one) becomes the profile picture
+
+  Why multiple embeddings?
+  → Different angles/lighting create different vectors
+  → Matching against 5-10 vectors is far more robust than 1 averaged vector
+  → If ANY stored embedding matches the video face, the student is recognized
+
+IDENTIFICATION FLOW (Video Processing):
+  1. Video is uploaded and saved to disk
+  2. Background worker starts processing
+  3. Frames extracted at 2 FPS (2 frames per second)
+  4. Each frame is preprocessed:
+     - Converted BGR → RGB
+     - Upscaled if too small (< 640px)
+     - Brightness/contrast auto-adjusted for dark frames (CLAHE)
+  5. Face detection uses FALLBACK CHAIN:
+     - Try MTCNN first (best accuracy for frontal faces)
+     - If nothing found, try OpenCV Haar Cascade (catches different angles)
+     - If still nothing, try SSD (good for distant/small faces)
+  6. Each detected face (min 30x30px) gets a 512-d embedding via Facenet512
+  7. Embedding compared against ALL stored embeddings using DUAL METRICS:
+     - Cosine Similarity (threshold: 0.4)
+     - Euclidean Distance (threshold: 30.0)
+     - Match if EITHER metric passes
+  8. Best confidence per student is kept (deduplicated)
+  9. Results broadcast via WebSocket in real-time
+  10. All students marked: detected = present, not detected = absent
+
+MATCHING ALGORITHM:
+  For each face detected in video:
+    For each stored embedding in database:
+      cosine_score = dot(face, stored) / (norm(face) * norm(stored))
+      euclidean_dist = L2_norm(face - stored)
+      
+      if cosine_score >= 0.4 OR euclidean_dist <= 30.0:
+        → MATCH (keep best score per student)
+
+  Confidence = combined score from both metrics
+
+
+8. BUSINESS RULES
+================================================================================
+
+Sequential Weeks:
+  - Professors must take attendance in order (Week 1, then 2, then 3...)
+  - Cannot skip to Week 3 without completing Week 1 and 2
+  - CAN retake any previously completed week (overwrites old data)
+  - Admin can bypass this restriction
+
+Module Ownership:
+  - Each professor is assigned to exactly one module
+  - They can ONLY upload videos for their assigned module
+  - They can ONLY view sessions for their module
+  - Admin has access to all modules
+
+Attendance Logic:
+  - When a video is processed, ALL enrolled students get a record
+  - Detected in video → is_present = True + confidence score
+  - Not detected → is_present = False
+  - Retaking a week deletes the old session and all its attendance records
+
+
+9. PROJECT STRUCTURE
+================================================================================
+
+attend-ai/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py                 # FastAPI app, CORS, routers
+│   │   ├── config.py               # Environment settings
+│   │   ├── database.py             # Async SQLAlchemy engine/session
+│   │   ├── models.py               # All SQLAlchemy models
+│   │   ├── schemas.py              # Pydantic request/response schemas
+│   │   ├── auth.py                 # JWT + bcrypt auth utilities
+│   │   ├── routers/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth_router.py      # Login, /me endpoints
+│   │   │   ├── students.py         # Enrollment, profiles, attendance
+│   │   │   ├── modules.py          # Module CRUD
+│   │   │   ├── sessions.py         # Video upload, session management
+│   │   │   └── websocket.py        # WebSocket connection manager
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── face_detection.py   # MTCNN face validation
+│   │   │   ├── face_embedding.py   # Facenet512 embedding extraction
+│   │   │   ├── video_processor.py  # OpenCV frame extraction + preprocessing
+│   │   │   └── identification.py   # Cosine + Euclidean matching
+│   │   └── workers/
+│   │       ├── __init__.py
+│   │       └── video_worker.py     # Background video processing task
+│   ├── init_db.py                  # DB initialization + seed script
+│   ├── requirements.txt
+│   └── .env
+├── frontend/
+│   ├── src/
+│   │   ├── main.jsx                # React entry point
+│   │   ├── App.jsx                 # Router + navigation + auth guard
+│   │   ├── index.css               # Tailwind imports
+│   │   ├── components/
+│   │   │   ├── EnrollmentForm.jsx  # Multi-image upload with profile picker
+│   │   │   ├── VideoUpload.jsx     # Video file upload component
+│   │   │   ├── Dashboard.jsx       # Real-time processing dashboard
+│   │   │   └── ResultCard.jsx      # Individual match result card
+│   │   ├── hooks/
+│   │   │   └── useWebSocket.js     # WebSocket hook for live updates
+│   │   ├── services/
+│   │   │   └── api.js              # Axios client + auth interceptors
+│   │   └── pages/
+│   │       ├── LoginPage.jsx       # Authentication page
+│   │       ├── StudentsPage.jsx    # Student grid with attendance bars
+│   │       ├── StudentDetailPage.jsx # Individual student profile
+│   │       ├── EnrollPage.jsx      # Student enrollment page
+│   │       ├── IdentifyPage.jsx    # Take attendance (video upload)
+│   │       └── SessionsPage.jsx    # Session history + attendance details
+│   ├── package.json
+│   ├── vite.config.js              # Vite config with API proxy
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   └── index.html
+├── docker-compose.yml              # PostgreSQL + Redis containers
+├── .env.example
+├── documentation.txt               # This file
+└── README.md
+
+
+10. SETUP & INSTALLATION
+================================================================================
+
+Prerequisites:
+  - Python 3.12+
+  - Node.js 18+
+  - PostgreSQL (or Supabase account)
+
+Backend Setup:
+  cd attend-ai/backend
+  pip install -r requirements.txt
+  pip install tf-keras                    # Required for TensorFlow 2.21+
+  
+  # Configure database URL in .env
+  # Then initialize:
+  python init_db.py
+  
+  # Start server:
+  python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+Frontend Setup:
+  cd attend-ai/frontend
+  npm install
+  npm run dev
+  
+  # App available at http://localhost:5173
+
+Environment Variables (.env):
+  DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname
+  REDIS_URL=redis://localhost:6379/0
+  APP_HOST=0.0.0.0
+  APP_PORT=8000
+  CORS_ORIGINS=http://localhost:5173
+  FACE_MATCH_THRESHOLD=0.4
+  FRAME_EXTRACTION_FPS=2
+
+
+11. FRONTEND PAGES
+================================================================================
+
+/login
+  - Username/password form
+  - JWT token stored in localStorage
+  - Redirects to / on success
+
+/ (Students)
+  - Grid of all enrolled students
+  - Profile picture, name, student ID
+  - Attendance rate progress bar (color-coded: green/yellow/red)
+  - Click to view detailed profile
+
+/enroll (Admin only)
+  - Form: name, student ID (CNE), email
+  - Multi-image upload (3-10 photos)
+  - Click image to set as profile picture
+  - Validates face detection before submission
+
+/identify (Take Attendance)
+  - Module selector (auto-selected for professors, dropdown for admin)
+  - Week/séance selector (shows retake vs new options)
+  - Video upload
+  - After upload: real-time dashboard with progress bar
+  - Shows detected students as they're identified
+  - Summary when complete
+
+/sessions
+  - List of all past sessions with present/absent counts
+  - Filter by module
+  - Click session to see full attendance list
+  - Each student shown with present (green) or absent (red) badge
+
+/student/:id
+  - Full profile with large photo
+  - Overall attendance percentage
+  - Per-module breakdown with progress bars
+
+
+12. REAL-TIME UPDATES (WebSocket)
+================================================================================
+
+When a video is being processed, the frontend connects to:
+  ws://localhost:8000/ws/session/{session_id}
+
+Server sends JSON messages:
+  { "type": "status", "data": { "status": "extracting_frames", "progress": 0 } }
+  { "type": "status", "data": { "status": "identifying", "progress": 45 } }
+  { "type": "match", "data": { "name": "Mohamed", "student_id": "R130...", "confidence": 0.72 } }
+  { "type": "complete", "data": { "total_identified": 5, "total_frames": 20 } }
+
+Status progression:
+  extracting_frames → detecting_faces → identifying → complete
+
+
+13. TIPS FOR BEST RESULTS
+================================================================================
+
+Enrollment Photos (3-10 per student):
+  - Include frontal face (looking at camera)
+  - Include slight left and right angles
+  - Mix indoor and outdoor lighting
+  - At least one photo similar to video quality
+  - Clear, unobstructed face (no sunglasses, masks)
+  - Different expressions (neutral, slight smile)
+
+Video Recording:
+  - Good lighting (avoid backlight)
+  - Camera at face level or slightly above
+  - Students should face camera at some point
+  - Minimum 720p resolution recommended
+  - Avoid excessive motion blur
+  - 5-15 seconds is usually enough if faces are visible
+
+Troubleshooting Low Detection:
+  - Enroll with MORE photos (8-10 instead of 3)
+  - Use photos taken in similar conditions to the video
+  - Ensure video has adequate lighting
+  - Lower FACE_MATCH_THRESHOLD in .env (try 0.35)
+  - Increase FRAME_EXTRACTION_FPS (try 3)
+
+
+14. MODULES (FST Marrakech)
+================================================================================
+
+Code  | Name                              | Professor
+------+-----------------------------------+------------------
+AN    | Analyse Numérique                 | Prof. Benali
+ALG   | Algèbre                           | Prof. Tazi
+POO   | Programmation Orientée Objet      | Prof. Amrani
+BD    | Bases de Données                  | Prof. Kabbaj
+RI    | Réseaux Informatiques             | Prof. Mouline
+SE    | Systèmes d'Exploitation           | Prof. Hajji
+PS    | Probabilités et Statistiques      | Prof. Zerouali
+
+Each module has 14 weeks of sessions.
+
+
+15. SECURITY NOTES
+================================================================================
+
+- Passwords hashed with bcrypt (cost factor 12)
+- JWT tokens expire after 24 hours
+- CORS restricted to frontend origin
+- File uploads validated (type + size limits)
+- SQL injection prevented via SQLAlchemy ORM
+- Profile images stored as base64 in DB (no file system exposure)
+- SECRET_KEY should be changed in production (app/auth.py)
+- Database credentials should use environment variables
+
+Production Recommendations:
+- Change SECRET_KEY to a random 64-char string
+- Use HTTPS
+- Set stricter CORS origins
+- Add rate limiting
+- Store videos in cloud storage (S3/GCS) instead of local disk
+- Add proper logging and monitoring
+
+
+================================================================================
+                         END OF DOCUMENTATION
+================================================================================

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0EA5E9"/>
+      <stop offset="100%" style="stop-color:#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0284C7"/>
+      <stop offset="100%" style="stop-color:#0891B2"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect x="32" y="32" width="448" height="448" rx="96" fill="url(#grad)"/>
+  <!-- Face scan frame - top left -->
+  <path d="M128 160 L128 128 L160 128" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <!-- Face scan frame - top right -->
+  <path d="M384 160 L384 128 L352 128" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <!-- Face scan frame - bottom left -->
+  <path d="M128 352 L128 384 L160 384" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <!-- Face scan frame - bottom right -->
+  <path d="M384 352 L384 384 L352 384" stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <!-- Stylized A letter -->
+  <path d="M256 148 L176 372 L208 372 L224 324 L288 324 L304 372 L336 372 L256 148Z M236 292 L256 228 L276 292 Z" fill="white"/>
+  <!-- Scan line -->
+  <rect x="152" y="248" width="208" height="4" rx="2" fill="white" opacity="0.6"/>
+  <!-- Small dot indicators -->
+  <circle cx="168" cy="168" r="6" fill="white" opacity="0.7"/>
+  <circle cx="344" cy="168" r="6" fill="white" opacity="0.7"/>
+</svg>
