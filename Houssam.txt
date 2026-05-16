@@ -1,0 +1,294 @@
+================================================================================
+          HOUSSAM — Android App Development Brief for AttendAI
+          Instructions for Kiro AI Agent
+================================================================================
+
+CONTEXT:
+You are building the Android (Kotlin/Jetpack Compose) version of "AttendAI",
+a facial recognition attendance system for FST Marrakech. The backend API and
+database already exist and are shared with the web version. Your job is to
+build a native Android app that connects to the SAME backend and matches the
+web app's design language and functionality.
+
+================================================================================
+1. BACKEND CONNECTION
+================================================================================
+
+The backend is a FastAPI server. Your friend runs it locally:
+  python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+Base URL for API calls:
+  http://<his-pc-ip>:8000/api
+
+All endpoints use JSON. Auth is via JWT Bearer token in the Authorization header.
+  Authorization: Bearer <token>
+
+The database is shared (Supabase PostgreSQL). Any data created from Android
+appears on the web app and vice versa.
+
+================================================================================
+2. DESIGN SYSTEM (Match the Web App Exactly)
+================================================================================
+
+COLORS:
+  - Background/Canvas:    #F8FAFC (very light blue-grey)
+  - Surface/Cards:        #FFFFFF (white)
+  - Primary Text:         #0F172A (deep navy/slate-900)
+  - Secondary Text:       #64748B (slate-500)
+  - Muted Text:           #94A3B8 (slate-400)
+  - Accent/Interactive:   #0EA5E9 (sky-500, cyber teal)
+  - Present/Success:      #10B981 (emerald-500)
+  - Absent/Error:         #E11D48 (rose-600)
+  - Justified/Warning:    #F59E0B (amber-500)
+  - Card Borders:         #F1F5F9 (slate-100)
+
+TYPOGRAPHY:
+  - Headings: Bold, geometric sans-serif (equivalent to "Plus Jakarta Sans")
+    → Use Google Fonts "Plus Jakarta Sans" or system bold
+  - Body/UI: Clean sans-serif (equivalent to "Inter")
+    → Use Google Fonts "Inter" or system default
+
+CARD STYLE:
+  - White background
+  - 1px border in #F1F5F9
+  - 12-16dp corner radius
+  - Subtle shadow (elevation 1-2dp)
+  - No harsh borders ever
+
+BUTTONS:
+  - Primary: #0F172A background, white text, 12dp radius
+  - Secondary: White background, #F1F5F9 border, slate text
+  - Danger: #FEF2F2 background, #E11D48 text
+
+BADGES:
+  - Present: #ECFDF5 bg, #10B981 text, #A7F3D0 border
+  - Absent: #FEF2F2 bg, #E11D48 text, #FECACA border
+  - Justified: #FFFBEB bg, #F59E0B text, #FDE68A border
+  - Pending: #F0F9FF bg, #0EA5E9 text, #BAE6FD border
+
+================================================================================
+3. AUTHENTICATION
+================================================================================
+
+UNIFIED LOGIN SCREEN:
+  - One login page for all roles
+  - Input: username/email + password
+  - The backend auto-detects the role:
+    * Admin username (e.g., "admin") → admin dashboard
+    * Professor username (e.g., "prof.benali") → professor view
+    * Student email (e.g., "student@uca.ac.ma") → student portal
+
+API CALL:
+  POST /api/auth/login
+  Body: { "username": "admin", "password": "admin123" }
+  Response: { "access_token": "jwt...", "user": { "id", "name", "role", "module_id" } }
+
+Store the token in SharedPreferences/DataStore. Attach to all subsequent requests.
+
+DEFAULT CREDENTIALS:
+  Admin:      admin / admin123
+  Professors: prof.benali / prof123 (and similar for each prof)
+  Students:   their-email@domain.com / 12341234
+
+================================================================================
+4. APP STRUCTURE (Screens by Role)
+================================================================================
+
+ADMIN sees:
+  - Dashboard (stats overview)
+  - Students list (grid with profile pics + attendance %)
+  - Student detail (profile + per-module breakdown + edit/delete)
+  - Enroll student (multi-photo upload)
+  - Take Attendance (camera → live scan or record video)
+  - Sessions list (history + attendance detail + QR generation)
+  - Reclamations (approve/decline justifications)
+  - Analytics (heatmap + trends + risk radar)
+  - Export (CSV download)
+  - Audit log
+
+PROFESSOR sees:
+  - Dashboard
+  - Students list (read-only)
+  - Student detail (read-only)
+  - Take Attendance (own module only)
+  - Sessions (own module only)
+  - Reclamations (own module only)
+  - Analytics
+
+STUDENT sees:
+  - My Attendance (overall rate + per-module breakdown)
+  - Week dots (green=present, red=absent, tap red to submit reclamation)
+  - My Reclamations (status tracking)
+  - QR Check-in
+  - Download Certificate
+
+================================================================================
+5. KEY API ENDPOINTS
+================================================================================
+
+AUTH:
+  POST /api/auth/login              → { username, password }
+
+STUDENTS:
+  GET  /api/students/               → list of students with attendance_rate
+  GET  /api/students/{student_id}   → single student profile
+  GET  /api/students/{id}/attendance → per-module breakdown
+  POST /api/students/enroll         → multipart: name, student_id, email, profile_index, images[]
+  PATCH /api/students/{id}          → multipart: name, email, new_student_id
+  DELETE /api/students/{id}
+
+MODULES:
+  GET  /api/modules/                → list of all modules (public, no auth needed)
+
+SESSIONS:
+  POST /api/sessions/identify       → multipart: module_id, week_number, video
+  GET  /api/sessions/               → list (filtered by role)
+  GET  /api/sessions/next-week/{module_id} → { next_week, last_completed_week }
+  GET  /api/sessions/{id}/attendance → full attendance list
+
+LIVE SCAN:
+  POST /api/live/start              → multipart: module_id, week_number → { scan_id }
+  POST /api/live/frame              → multipart: scan_id, frame_data (base64 JPEG)
+                                      → { new_matches, confirmed_count, frame_count }
+  POST /api/live/finish             → multipart: scan_id → { present_count, absent_count }
+
+QR CODE:
+  POST /api/qr/generate/{session_id} → multipart: latitude, longitude → { qr_image, token }
+  POST /api/qr/checkin              → multipart: token, student_id, latitude, longitude
+
+RECLAMATIONS:
+  POST /api/reclamations/submit     → multipart: student_id, session_id, message, attachment?
+  GET  /api/reclamations/student/{id} → student's reclamation history
+  GET  /api/reclamations/pending    → pending reclamations (for prof)
+  POST /api/reclamations/{id}/resolve → multipart: decision (approved/declined), response
+
+ANALYTICS:
+  GET  /api/analytics/heatmap       → modules × weeks matrix
+  GET  /api/analytics/at-risk       → students with 2+ absences
+  GET  /api/analytics/trends        → line chart data per module
+
+REPORTS:
+  GET  /api/reports/student/{id}    → PDF download
+  GET  /api/reports/certificate/{id} → PDF certificate download
+  GET  /api/analytics/export/csv    → CSV download
+
+DASHBOARD:
+  GET  /api/dashboard/stats         → { total_students, total_modules, total_sessions, overall_rate, at_risk_count, recent_sessions }
+
+NOTIFICATIONS:
+  GET  /api/notifications/          → { notifications[], unread_count }
+  POST /api/notifications/read-all
+
+ATTENDANCE OVERRIDES:
+  PATCH /api/attendance/{record_id} → multipart: status (present/absent/justified), justification?
+  GET   /api/attendance/session/{id} → detailed attendance with record_ids
+
+STUDENT PORTAL:
+  GET  /api/portal/my-attendance/{student_id} → full attendance with session_ids per week
+
+================================================================================
+6. LIVE SCAN FLOW (Most Important Feature)
+================================================================================
+
+This is the killer feature. The professor opens the camera and students are
+identified in real-time as the camera sees them.
+
+FLOW:
+1. Call POST /api/live/start with module_id + week_number → get scan_id
+2. Open CameraX preview
+3. Every 500ms, capture a frame as JPEG, convert to base64
+4. Send POST /api/live/frame with scan_id + frame_data
+5. Response contains new_matches[] — display them as they appear
+6. When professor taps "Finish", call POST /api/live/finish
+7. Backend saves attendance (present for 2+ frame detections, absent for rest)
+
+UI DURING SCAN:
+  - Full-screen camera preview
+  - Overlay: scanning indicator (pulsing line or border)
+  - Top-left: "Scanning · X frames" counter
+  - Top-right: "Y identified" counter
+  - Bottom: scrollable list of identified students (slide in with animation)
+  - Bottom button: "Finish & Save (Y found)"
+
+================================================================================
+7. RECORD VIDEO FLOW (Alternative)
+================================================================================
+
+1. Record video using CameraX (MP4 or WebM)
+2. Upload via POST /api/sessions/identify (multipart: module_id, week_number, video)
+3. Response: { session_id, ws_url }
+4. Connect to WebSocket at ws://<ip>:8000/ws/session/{session_id}
+5. Receive real-time messages:
+   { "type": "status", "data": { "status": "identifying", "progress": 45 } }
+   { "type": "match", "data": { "name": "Mohamed", "student_id": "R130...", "confidence": 0.72 } }
+   { "type": "complete", "data": { "total_identified": 5, "total_frames": 20 } }
+6. Display progress bar + matches as they come in
+
+================================================================================
+8. QR CODE FLOW
+================================================================================
+
+PROFESSOR GENERATES:
+  - After a session is completed, professor can generate QR
+  - Call POST /api/qr/generate/{session_id} with latitude + longitude
+  - Response includes qr_image (base64 PNG) — display it full screen
+  - QR expires in 10 minutes
+
+STUDENT SCANS:
+  - Student opens QR scanner in their app
+  - Reads the token from the QR data (format: https://domain/portal?token=UUID)
+  - Extract the token UUID
+  - Get student's GPS location
+  - Call POST /api/qr/checkin with token, student_id, latitude, longitude
+  - Must be within 50 meters of professor's location
+  - Response: success or error message
+
+================================================================================
+9. STUDENT RECLAMATION FLOW
+================================================================================
+
+1. Student views their attendance → sees red (absent) weeks
+2. Taps an absent week → opens justification form
+3. Enters reason text + optionally attaches a photo/PDF (medical certificate)
+4. Submits via POST /api/reclamations/submit
+5. Professor gets notified → reviews in their Reclamations screen
+6. Professor approves or declines → student gets email notification
+
+================================================================================
+10. IMPORTANT NOTES
+================================================================================
+
+- All file uploads use multipart/form-data
+- Images for enrollment: send as multiple files in "images" field
+- Profile images are stored as base64 data URIs in the database
+- The "confidence" field in attendance: 0.99 = QR check-in, -1 = justified, other = AI score
+- Sequential weeks: professor can't skip weeks (backend enforces this)
+- Module ownership: professor can only access their own module (backend enforces)
+- The backend handles all AI processing — Android just sends frames/video
+
+SHARED DATABASE:
+- Both web and Android apps use the same Supabase PostgreSQL database
+- Any student enrolled from web appears on Android and vice versa
+- Attendance taken from either platform is visible on both
+- The .env file contains the database connection string — keep it secret
+
+================================================================================
+11. TECH RECOMMENDATIONS FOR ANDROID
+================================================================================
+
+- Language: Kotlin
+- UI: Jetpack Compose (Material 3)
+- HTTP: Retrofit + OkHttp (with auth interceptor for JWT)
+- Camera: CameraX
+- Image loading: Coil (handles base64 data URIs)
+- Navigation: Jetpack Navigation Compose
+- State: ViewModel + StateFlow
+- Storage: DataStore (for token persistence)
+- WebSocket: OkHttp WebSocket client
+- QR Scanner: ML Kit Barcode Scanning or ZXing
+- PDF viewer: AndroidPdfViewer library
+- Charts: Vico or MPAndroidChart
+
+================================================================================
+                         END OF BRIEF
+================================================================================
