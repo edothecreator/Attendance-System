@@ -236,36 +236,39 @@ async def resolve_reclamation(
     await db.flush()
     await db.commit()
 
-    # Send email to student
-    student_q = await db.execute(select(Student).where(Student.id == reclamation.student_ref))
-    student = student_q.scalar_one_or_none()
+    # Send email and notifications (non-blocking)
+    try:
+        student_q = await db.execute(select(Student).where(Student.id == reclamation.student_ref))
+        student = student_q.scalar_one_or_none()
 
-    session_q = await db.execute(select(Session).where(Session.id == reclamation.session_id))
-    session = session_q.scalar_one_or_none()
+        session_q = await db.execute(select(Session).where(Session.id == reclamation.session_id))
+        session = session_q.scalar_one_or_none()
 
-    module_q = await db.execute(select(Module).where(Module.id == session.module_id)) if session else None
-    module = module_q.scalar_one_or_none() if module_q else None
+        module_q = await db.execute(select(Module).where(Module.id == session.module_id)) if session else None
+        module = module_q.scalar_one_or_none() if module_q else None
 
-    if student and student.email:
-        send_reclamation_result_email(
-            student_name=student.name,
-            student_email=student.email,
-            module_name=module.name if module else "Unknown",
-            module_code=module.code if module else "",
-            week_number=session.week_number if session else 0,
-            decision=decision,
-            professor_response=response,
-            professor_name=user.name,
+        if student and student.email:
+            send_reclamation_result_email(
+                student_name=student.name,
+                student_email=student.email,
+                module_name=module.name if module else "Unknown",
+                module_code=module.code if module else "",
+                week_number=session.week_number if session else 0,
+                decision=decision,
+                professor_response=response,
+                professor_name=user.name,
+            )
+
+        from app.routers.audit import log_action
+        log_action(user.name, f"reclamation_{decision}", str(reclamation.id), f"{student.name if student else 'Unknown'} - {decision}")
+
+        from app.routers.notifications import add_notification
+        add_notification(
+            title=f"Reclamation {decision.capitalize()}",
+            message=f"{user.name} {decision} {student.name if student else 'Unknown'}'s justification.",
+            type="success" if decision == "approved" else "warning",
         )
-
-    from app.routers.audit import log_action
-    log_action(user.name, f"reclamation_{decision}", str(reclamation.id), f"{student.name if student else 'Unknown'} - {decision}")
-
-    from app.routers.notifications import add_notification
-    add_notification(
-        title=f"Reclamation {decision.capitalize()}",
-        message=f"{user.name} {decision} {student.name}'s justification.",
-        type="success" if decision == "approved" else "warning",
-    )
+    except Exception as e:
+        print(f"[WARN] Post-resolve notification failed: {e}")
 
     return {"message": f"Reclamation {decision}.", "status": decision}
