@@ -24,7 +24,7 @@ function CameraRecorder({ onVideoReady, onCancel }) {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
       }
       setState("previewing");
     } catch (err) {

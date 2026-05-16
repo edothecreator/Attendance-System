@@ -79,25 +79,24 @@ async def start_live_scan(
 @router.post("/frame")
 async def process_frame(
     scan_id: str = Form(...),
-    frame_data: str = Form(...),  # base64 encoded JPEG frame
+    frame_data: str = Form(...),
 ):
-    """Process a single frame from the live camera. Returns any new matches found."""
+    """Process a single frame. Optimized for speed."""
     if scan_id not in live_sessions:
-        raise HTTPException(status_code=400, detail="Invalid scan session.")
+        return {"new_matches": [], "confirmed_count": 0, "frame_count": 0, "expired": True}
 
     session = live_sessions[scan_id]
     session["frame_count"] += 1
 
     # Decode base64 frame
     try:
-        # Remove data URL prefix if present
         if "," in frame_data:
             frame_data = frame_data.split(",")[1]
         img_bytes = base64.b64decode(frame_data)
         img = Image.open(BytesIO(img_bytes)).convert("RGB")
         frame = np.array(img)
     except Exception:
-        return {"matches": [], "frame_count": session["frame_count"]}
+        return {"new_matches": [], "confirmed_count": len([d for d in session["detections"].values() if d["count"] >= 2]), "frame_count": session["frame_count"]}
 
     # Extract faces and match
     embeddings = extract_faces_from_frame_fast(frame)
@@ -127,16 +126,11 @@ async def process_frame(
                     "confidence": session["detections"][ref]["best_confidence"],
                 })
 
-    # Return currently confirmed students
-    confirmed = [
-        {"name": d["name"], "student_id": d["student_id"], "confidence": d["best_confidence"]}
-        for d in session["detections"].values()
-        if d["count"] >= 2
-    ]
+    confirmed = len([d for d in session["detections"].values() if d["count"] >= 2])
 
     return {
         "new_matches": new_matches,
-        "confirmed_count": len(confirmed),
+        "confirmed_count": confirmed,
         "frame_count": session["frame_count"],
     }
 
@@ -153,7 +147,7 @@ async def finish_live_scan(
     if scan_id not in live_sessions:
         raise HTTPException(status_code=400, detail="Invalid scan session.")
 
-    session_data = live_sessions[scan_id]
+    session_data = live_sessions.pop(scan_id)  # Remove immediately
     module_id = session_data["module_id"]
     week_number = session_data["week_number"]
 
@@ -164,8 +158,7 @@ async def finish_live_scan(
     existing = existing_q.scalar_one_or_none()
     if existing:
         await db.execute(delete(AttendanceRecord).where(AttendanceRecord.session_id == existing.id))
-        await db.delete(existing)
-        await db.flush()
+        await db.execute(delete(Session).where(Session.id == existing.id))
 
     # Create session
     new_session = Session(
@@ -182,46 +175,38 @@ async def finish_live_scan(
         ref for ref, d in session_data["detections"].items() if d["count"] >= 2
     )
 
-    # Create attendance for all students
+    # Batch create all attendance records at once
     all_students_q = await db.execute(select(Student))
     all_students = all_students_q.scalars().all()
 
     present_count = 0
     for student in all_students:
         s_ref = str(student.id)
-        if s_ref in confirmed_refs:
-            det = session_data["detections"][s_ref]
-            record = AttendanceRecord(
-                session_id=new_session.id,
-                student_ref=student.id,
-                is_present=True,
-                confidence=det["best_confidence"],
-                detected_at_sec=None,
-            )
+        is_present = s_ref in confirmed_refs
+        confidence = session_data["detections"][s_ref]["best_confidence"] if is_present else None
+        if is_present:
             present_count += 1
-        else:
-            record = AttendanceRecord(
-                session_id=new_session.id,
-                student_ref=student.id,
-                is_present=False,
-                confidence=None,
-                detected_at_sec=None,
-            )
-        db.add(record)
+        db.add(AttendanceRecord(
+            session_id=new_session.id,
+            student_ref=student.id,
+            is_present=is_present,
+            confidence=confidence,
+            detected_at_sec=None,
+        ))
 
     await db.commit()
 
-    # Cleanup
-    del live_sessions[scan_id]
-
-    # Notification
-    from app.routers.notifications import add_notification
-    add_notification(
-        title="Live Scan Completed",
-        message=f"{present_count} student(s) identified via live scan.",
-        type="success",
-        for_module=module_id,
-    )
+    # Notification (non-blocking)
+    try:
+        from app.routers.notifications import add_notification
+        add_notification(
+            title="Live Scan Completed",
+            message=f"{present_count} student(s) identified via live scan.",
+            type="success",
+            for_module=module_id,
+        )
+    except Exception:
+        pass
 
     return {
         "message": "Attendance saved.",
